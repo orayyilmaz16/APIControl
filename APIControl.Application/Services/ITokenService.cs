@@ -1,5 +1,11 @@
-﻿public interface ITokenService
+﻿using APIControl.Application.DTOs.TokenDTO;
+using APIControl.Domain.Entities;
+
+namespace APIControl.Application.Services
 {
-    string CreateAccessToken(User user);
-    (string token, DateTime expiresAt) CreateRefreshToken();
+    public interface ITokenService
+    {
+        TokenResponse CreateTokens(User user);
+        bool ValidateToken(string token);
+    }
 }

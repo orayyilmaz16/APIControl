@@ -1,7 +1,8 @@
 ﻿// APIControl.Application/Mapping/AppProfile.cs
-using AutoMapper;
 using APIControl.Application.DTOs;
+using APIControl.Application.DTOs.TokenDTO;
 using APIControl.Domain.Entities;
+using AutoMapper;
 
 namespace APIControl.Application.Mapping
 {
@@ -45,6 +46,18 @@ namespace APIControl.Application.Mapping
                 .ForMember(d => d.AccessTokenExpiresAt, o => o.Ignore())
                 .ForMember(d => d.RefreshToken, o => o.MapFrom(s => s.RefreshToken))
                 .ForMember(d => d.RefreshTokenExpiresAt, o => o.MapFrom(s => s.RefreshTokenExpiresAt));
+
+            CreateMap<User, TokenResponse>()
+                .ForMember(d => d.AccessToken, o => o.Ignore())
+                .ForMember(d => d.AccessTokenExpiresAt, o => o.Ignore())
+                .ForMember(d => d.RefreshToken, o => o.MapFrom(s => s.RefreshToken))
+                .ForMember(d => d.RefreshTokenExpiresAt, o => o.MapFrom(s => s.RefreshTokenExpiresAt))
+                .ForMember(d => d.UserId, o => o.MapFrom(s => s.Id))
+                .ForMember(d => d.Email, o => o.MapFrom(s => s.Email))
+                .ForMember(d => d.Role, o => o.MapFrom(s => s.Role ?? "User"))
+                .ForMember(d => d.ProductId, o => o.MapFrom(s => s.ProductId));
         }
+
+
     }
 }

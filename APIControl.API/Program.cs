@@ -28,6 +28,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 // AutoMapper & Validators
 builder.Services.AddAutoMapper(typeof(AppProfile));
 builder.Services.AddValidatorsFromAssemblyContaining<CreateProductValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
 
 // Controllers + Newtonsoft.Json
 builder.Services.AddControllers()

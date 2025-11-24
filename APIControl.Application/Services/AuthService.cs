@@ -1,87 +1,81 @@
 ﻿using APIControl.Application.DTOs;
-using System.Security.Cryptography;
-using System.Text;
+using APIControl.Domain.Entities;
 
-public class AuthService : IAuthService
+namespace APIControl.Application.Services
 {
-    private readonly IUserRepository _users;
-    private readonly ITokenService _tokens;
-
-    public AuthService(IUserRepository users, ITokenService tokens)
+    public class AuthService : IAuthService
     {
-        _users = users;
-        _tokens = tokens;
-    }
+        private readonly IUserService _users;
+        private readonly ITokenService _tokens;
 
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest req)
-    {
-        // Parola hash (örnek PBKDF2; prod’da BCrypt/Argon2 önerilir)
-        var hash = HashPassword(req.Password);
-
-        var user = new User
+        public AuthService(IUserService users, ITokenService tokens)
         {
-            Id = Guid.NewGuid(),
-            Email = req.Email,
-            PasswordHash = hash,
-            Role = "User",
-            ProductId = req.ProductId
-        };
+            _users = users;
+            _tokens = tokens;
+        }
 
-        await _users.CreateAsync(user);
+        public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+        {
+            // Yeni kullanıcı oluştur
+            var user = await _users.RegisterAsync(request.Email, request.Password, request.ProductId, "User");
 
-        var access = _tokens.CreateAccessToken(user);
-        var (refresh, exp) = _tokens.CreateRefreshToken();
+            // Token üret
+            var tokenResponse = _tokens.CreateTokens(user);
 
-        user.RefreshToken = refresh;
-        user.RefreshTokenExpiresAt = exp;
-        await _users.UpdateAsync(user);
+            return new AuthResponse
+            {
+                UserId = user.Id,
+                Email = user.Email,
+                Role = user.Role ?? "User",
+                ProductId = user.ProductId,
+                AccessToken = tokenResponse.AccessToken,
+                AccessTokenExpiresAt = tokenResponse.AccessTokenExpiresAt,
+                RefreshToken = tokenResponse.RefreshToken,
+                RefreshTokenExpiresAt = tokenResponse.RefreshTokenExpiresAt
+            };
+        }
 
-        return new AuthResponse(access, refresh);
+        public async Task<AuthResponse> LoginAsync(LoginRequest request)
+        {
+            var isValid = await _users.ValidatePasswordAsync(request.Email, request.Password);
+            if (!isValid)
+                throw new UnauthorizedAccessException("Email veya parola hatalı!");
+
+            var user = await _users.GetUserByEmailAsync(request.Email);
+            if (user == null)
+                throw new UnauthorizedAccessException("Kullanıcı bulunamadı!");
+
+            var tokenResponse = _tokens.CreateTokens(user);
+
+            return new AuthResponse
+            {
+                UserId = user.Id,
+                Email = user.Email,
+                Role = user.Role ?? "User",
+                ProductId = user.ProductId,
+                AccessToken = tokenResponse.AccessToken,
+                AccessTokenExpiresAt = tokenResponse.AccessTokenExpiresAt,
+                RefreshToken = tokenResponse.RefreshToken,
+                RefreshTokenExpiresAt = tokenResponse.RefreshTokenExpiresAt
+            };
+        }
+
+        public async Task<RefreshResponse> RefreshAsync(RefreshRequest request)
+        {
+            // Refresh token kontrolü
+            var user = await _users.GetUserByEmailAsync(request.DeviceId ?? string.Empty);
+            if (user == null || user.RefreshToken != request.RefreshToken || user.RefreshTokenExpiresAt < DateTime.UtcNow)
+                throw new UnauthorizedAccessException("Refresh token geçersiz veya süresi dolmuş!");
+
+            var tokenResponse = _tokens.CreateTokens(user);
+
+            return new RefreshResponse
+            {
+                AccessToken = tokenResponse.AccessToken,
+                AccessTokenExpiresAt = tokenResponse.AccessTokenExpiresAt,
+                RefreshToken = tokenResponse.RefreshToken,
+                RefreshTokenExpiresAt = tokenResponse.RefreshTokenExpiresAt
+            };
+        }
     }
-
-    public async Task<AuthResponse> LoginAsync(LoginRequest req)
-    {
-        var user = await _users.GetByEmailAsync(req.Email)
-                   ?? throw new UnauthorizedAccessException("Invalid credentials");
-
-        if (!VerifyPassword(req.Password, user.PasswordHash))
-            throw new UnauthorizedAccessException("Invalid credentials");
-
-        var access = _tokens.CreateAccessToken(user);
-        var (refresh, exp) = _tokens.CreateRefreshToken();
-
-        user.RefreshToken = refresh;
-        user.RefreshTokenExpiresAt = exp;
-        await _users.UpdateAsync(user);
-
-        return new AuthResponse(access, refresh);
-    }
-
-    public async Task<AuthResponse> RefreshAsync(RefreshRequest req)
-    {
-        var user = await _users.GetByRefreshTokenAsync(req.RefreshToken)
-                   ?? throw new UnauthorizedAccessException("Invalid refresh token");
-
-        if (user.RefreshTokenExpiresAt is null || user.RefreshTokenExpiresAt <= DateTime.UtcNow)
-            throw new UnauthorizedAccessException("Refresh token expired");
-
-        var access = _tokens.CreateAccessToken(user);
-        var (refresh, exp) = _tokens.CreateRefreshToken();
-
-        // Rotation: eski refresh tokenı geçersiz kıl, yenisi ver
-        user.RefreshToken = refresh;
-        user.RefreshTokenExpiresAt = exp;
-        await _users.UpdateAsync(user);
-
-        return new AuthResponse(access, refresh);
-    }
-
-    // Basit örnek hash/verify
-    private static string HashPassword(string password)
-    {
-        using var sha = SHA256.Create();
-        return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(password)));
-    }
-    private static bool VerifyPassword(string password, string hash) =>
-        HashPassword(password) == hash;
 }

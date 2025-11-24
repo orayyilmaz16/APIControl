@@ -1,8 +1,11 @@
 ﻿using APIControl.Application.DTOs;
 
-public interface IAuthService
+namespace APIControl.Application.Services
 {
-    Task<AuthResponse> RegisterAsync(RegisterRequest req);
-    Task<AuthResponse> LoginAsync(LoginRequest req);
-    Task<AuthResponse> RefreshAsync(RefreshRequest req);
+    public interface IAuthService
+    {
+        Task<AuthResponse> RegisterAsync(RegisterRequest request);
+        Task<AuthResponse> LoginAsync(LoginRequest request);
+        Task<RefreshResponse> RefreshAsync(RefreshRequest request);
+    }
 }
