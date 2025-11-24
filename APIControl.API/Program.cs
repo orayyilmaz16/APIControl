@@ -6,11 +6,9 @@ using APIControl.Infrastructure;
 using APIControl.Infrastructure.Data;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
-
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,12 +17,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
-// DI kayıtları
+// Dependency Injection kayıtları
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 // AutoMapper & Validators
-builder.Services.AddAutoMapper(typeof(ProductProfile));
+builder.Services.AddAutoMapper(typeof(AppProfile));
 builder.Services.AddValidatorsFromAssemblyContaining<CreateProductValidator>();
 
 // Controllers + Newtonsoft.Json
@@ -35,7 +37,10 @@ builder.Services.AddControllers()
         options.SerializerSettings.NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore;
     });
 
-// Swagger (Swashbuckle 10.0.1)
+// Authorization
+builder.Services.AddAuthorization();
+
+// Swagger (JWT destekli)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -45,6 +50,19 @@ builder.Services.AddSwaggerGen(c =>
         Version = "v1",
         Description = "APIControl Web API - Çok Katmanlı Mimari Örneği"
     });
+
+    // JWT Bearer şeması ekle
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "JWT Authorization header. Örnek: \"Bearer {token}\""
+    });
+
+  
 });
 
 // JWT Authentication
@@ -61,7 +79,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero // token süresini tam kontrol et
         };
     });
 
